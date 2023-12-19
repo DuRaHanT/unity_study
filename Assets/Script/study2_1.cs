@@ -5,11 +5,7 @@ using UnityEngine;
 public class study2_1 : MonoBehaviour
 {
     public GameObject[] players;
-    //public GameObject[] bombs;
-
     public GameObject bomb;
-
-    //public GameObject[] playerHasBombs;
 
     int currentBombCharacterIndex;
 
@@ -25,13 +21,9 @@ public class study2_1 : MonoBehaviour
         bomb = GameObject.FindWithTag("Bomb");
     }
 
-    void Start()
-    {
-        //bombs[currentBombCharacterIndex].SetActive(true);
-        StartCoroutine(BombTimerCoroutine());
-    }
+    void Start() => StartCoroutine(BombTimerCoroutine());
 
-    private IEnumerator BombTimerCoroutine()
+    IEnumerator BombTimerCoroutine()
     {
         yield return new WaitForSeconds(0.3f);
 
@@ -47,7 +39,7 @@ public class study2_1 : MonoBehaviour
         Debug.Log($"Character {players[previousBombCharacterIndex]} 승리!!!");
     }
 
-    private void PassBomb()
+    void PassBomb()
     {
         while(currentBombCharacterIndex == previousBombCharacterIndex)
         {
@@ -61,7 +53,7 @@ public class study2_1 : MonoBehaviour
 
         previousBombCharacterIndex = currentBombCharacterIndex;
     }
-
+    
     IEnumerator MoveBombCoroutine(Vector3 targetPosition)
     {
         float elapsedTime = 0.0f;
