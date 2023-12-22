@@ -1,33 +1,51 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 public class test : MonoBehaviour
 {
-   // animate the game object from -1 to +1 and back
-    public float minimum = -1.0F;
-    public float maximum =  1.0F;
+    private NavMeshAgent navMeshAgent;
 
-    // starting value for the Lerp
-    static float t = 0.0f;
-
-    void Update()
+    void Start()
     {
-        // animate the position of the game object...
-        transform.position = new Vector3(Mathf.Lerp(minimum, maximum, t), 0, 0);
+        navMeshAgent = GetComponent<NavMeshAgent>();
 
-        // .. and increase the t interpolater
-        t += 0.5f * Time.deltaTime;
+        // 시작하면서 랜덤한 위치로 이동
+        StartCoroutine(MoveRandomly());
+    }
 
-        // now check if the interpolator has reached 1.0
-        // and swap maximum and minimum so game object moves
-        // in the opposite direction.
-        if (t > 1.0f)
+    IEnumerator MoveRandomly()
+    {
+        while (true)
         {
-            float temp = maximum;
-            maximum = minimum;
-            minimum = temp;
-            t = 0.0f;
+            // 랜덤한 위치 얻기
+            Vector3 randomPoint = GetRandomPointOnNavMesh();
+            
+            // 랜덤한 위치로 이동
+            navMeshAgent.SetDestination(randomPoint);
+
+            // 이동 완료 대기
+            yield return new WaitUntil(() => navMeshAgent.remainingDistance < 0.1f);
+
+            // 다음 이동을 위해 잠시 대기
+            yield return new WaitForSeconds(Random.Range(1f, 5f));
         }
+    }
+
+    Vector3 GetRandomPointOnNavMesh()
+    {
+        NavMeshHit hit;
+        Vector3 randomPoint;
+
+        do
+        {
+            randomPoint = new Vector3(
+                Random.Range(-10f, 10f),
+                0f,
+                Random.Range(-10f, 10f)
+            );
+        } while (!NavMesh.SamplePosition(randomPoint, out hit, 1.0f, NavMesh.AllAreas));
+
+        return hit.position;
     }
 }

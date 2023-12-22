@@ -21,7 +21,10 @@ public class study2_1 : MonoBehaviour
         bomb = GameObject.FindWithTag("Bomb");
     }
 
-    void Start() => StartCoroutine(BombTimerCoroutine());
+    void Start() 
+    {
+        StartCoroutine(BombTimerCoroutine());
+    } 
 
     IEnumerator BombTimerCoroutine()
     {
