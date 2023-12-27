@@ -5,7 +5,7 @@ public class study2_2 : MonoBehaviour
     GameObject[] players;
     GameObject bomb;
 
-    float bombTimer = 20.0f;
+    float timer = 30.0f;
 
     void Awake()
     {
@@ -26,5 +26,22 @@ public class study2_2 : MonoBehaviour
         }
 
         bomb.AddComponent<Bomb>();
+    }
+
+    void Update()
+    {
+        timer -= Time.deltaTime;
+        if(timer <= 0)
+        {
+           // Stop();
+        }
+    }
+
+    void Stop()
+    {
+        for(int i = 0; i < players.Length; i++)
+        {
+            players[i].GetComponent<Player>().enabled = false;
+        }
     }
 }

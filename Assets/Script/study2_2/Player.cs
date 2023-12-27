@@ -1,240 +1,163 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using UnityEngine.AI;
-using UnityEngine.Playables;
-
-public enum PlayerState {None = -1, Idle = 0, Move = 1, Run = 2, Pass = 3, Away = 4}
 
 public class Player : MonoBehaviour
 {
-    NavMeshAgent navMeshAgent;
-    PlayerState playerState = PlayerState.None;
+    Rigidbody rigidbody;
+    public GameObject bomb;
+    public Transform target;
 
-    float passLimitRange = 5.0f;
-    float targetRecognitionRange = 10.0f;
-    float playersRecognitionRange = 20.0f;
     float speed = 10.0f;
+    float runSpeed = 30.0f;
+    float detectionRadius = 10.0f;
+    int nowHasBombIndex;
 
-    [HideInInspector] public bool isBomb = false;
-    bool isPlayer;
-    Transform target;
+    [HideInInspector] public bool hasBomb = false;
+    bool isNearbyPlayer;
+    public bool isPassBomb = false;
 
-    void Awake() => navMeshAgent = GetComponent<NavMeshAgent>();
-
-    void Start()
+    void Awake() 
     {
-        GameObject test = GameObject.Find("Player 2");
-        target = test.transform;
-
-        ChangeState(PlayerState.Move);
+        rigidbody = GetComponent<Rigidbody>();
+        if(gameObject.transform.childCount != 0) bomb = gameObject.transform.Find("Bomb").gameObject;
     }
 
-    void Update() => ShootRayInCircle();
-
-    IEnumerator Idle()
+    void Update()
     {
-        float chageTime = Random.Range(0.1f, 0.5f);
-
-        yield return new WaitForSeconds(chageTime);
-
-        ChangeState(PlayerState.Move);
+        MoveAutomatically();
+        Run(GetTarget());
+        CheckNearbyPlayer();
+        Away();
     }
 
-
-    void ChangeState(PlayerState newstate)
+    void MoveAutomatically()
     {
-        if(playerState == newstate) return;
-
-        StopCoroutine(newstate.ToString());
-
-        playerState = newstate;
-
-        StartCoroutine(newstate.ToString());
-    }
-
-    void ShootRayInCircle()
-    {
-        Vector3 rayOrigin = transform.position;
-
-        float angle = Random.Range(0f, 360f);
-
-        Vector3 rayDirection = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
-
-        Ray ray = new Ray(rayOrigin, rayDirection);
-
-        RaycastHit hit;
-
-        if (Physics.Raycast(ray, out hit, playersRecognitionRange * 1.5f))
+        Vector3 force = Vector3.zero;
+        GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
+        foreach (var player in players)
         {
-            isPlayer = true;
+            if (player != this.gameObject && player.GetComponent<Player>().hasBomb)
+            {
+                Vector3 directionToAvoid = transform.position - player.transform.position;
 
-            if(isBomb == true)
-            {
-                if (hit.distance < passLimitRange)
-                {
-                    ChangeState(PlayerState.Pass);
-                }
-                else if (hit.distance < targetRecognitionRange)
-                {
-                    ChangeState(PlayerState.Run);
-                }
-            }
-            if(hit.distance <= playersRecognitionRange) 
-            {
-                ChangeState(PlayerState.Away);
+                force = directionToAvoid.normalized * speed;
+                rigidbody.AddForce(force, ForceMode.VelocityChange);
+
             }
         }
+
+
+        Vector3 randomDirection = UnityEngine.Random.onUnitSphere;
+        force = randomDirection.normalized * speed;
+
+        rigidbody.velocity = force;
     }
 
-    void OnDrawGizmos()
+    Transform GetTarget()
     {
-        Gizmos.color = Color.black;
-        Gizmos.DrawRay(transform.position, navMeshAgent.destination - transform.position);
-
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, targetRecognitionRange);
-
-        Gizmos.color = Color.green;
-        Gizmos.DrawWireSphere(transform.position, playersRecognitionRange);
-
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, passLimitRange);
-    }
-
-    IEnumerator Move()
-    {
-        if (!isBomb)
+        if(hasBomb == false) return null;
+        if(target != null) return target;
+        GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
+        for(int i = 0; i< players.Length; i++)
         {
-            float currentTime = 0.0f;
-            float maxTime = 10.0f;
-
-            navMeshAgent.speed = speed;
-
-            navMeshAgent.SetDestination(CalculateMovePosition());
-            
-            Vector3 to = new Vector3(navMeshAgent.destination.x, 0, navMeshAgent.destination.z);            
-            Vector3 from = new Vector3(transform.position.x, 0, transform.position.z);
-            transform.rotation = Quaternion.LookRotation(to - from);
-
-            while(currentTime < maxTime)
+            if(players[i].GetComponent<Player>().hasBomb == true)
             {
-                if(isPlayer == false)
-                {
-                    currentTime += Time.deltaTime;
-
-                    if ((to - from).sqrMagnitude < 0.01f || currentTime >= maxTime)
-                    {
-                        ChangeState(PlayerState.Idle);
-                    }
-                } 
-                else if(isPlayer == true)
-                {
-                    currentTime = maxTime;
-                    ChangeState(PlayerState.Idle);
-                }
-                yield return null;
+                nowHasBombIndex = i;
             }
         }
-    }
-
-    Vector3 CalculateMovePosition()
-    {
-        float wanderRadius = 10;
-        int wanderJitter = 0;
-        int wanderjitterMin = 0;
-        int wanderjitterMax = 360;
-
-        Vector3 rangePosition = Vector3.zero;
-        Vector3 rangeScale = Vector3.one * 100.0f;
-
-        wanderJitter = Random.Range(wanderjitterMin, wanderjitterMax);
-        Vector3 targetPosition = transform.position + SetAngle(wanderRadius, wanderJitter);
-
-        targetPosition.x = Mathf.Clamp(targetPosition.x, rangePosition.x - rangeScale.x * 0.5f, rangePosition.x + rangeScale.x * 0.5f);
-        targetPosition.y = 0.0f;
-        targetPosition.z = Mathf.Clamp(targetPosition.z, rangePosition.z - rangeScale.z * 0.5f, rangePosition.z + rangeScale.z * 0.5f);
-
-        return targetPosition;
-    }
-
-    Vector3 SetAngle(float radius, int angle)
-    {
-        Vector3 position = Vector3.zero;
-
-        position.x = Mathf.Cos(angle) * radius;
-        position.z = Mathf.Sin(angle) * radius;
-
-        return position;
-    }
-
-    IEnumerator Run()
-    {
-        if(isBomb == true)
+        for(int i = nowHasBombIndex; i < players.Length -1; i++)
         {
-            navMeshAgent.speed = speed * 1.5f;
-
-            navMeshAgent.SetDestination(target.position);
-
-            LookRotationToTarget();
-
-            yield return null;
+            players[i] = players[i+1];
         }
-    }
 
-    void LookRotationToTarget()
-    {
-        Vector3 to = new Vector3(target.position.x, 0, target.position.z);
-        Vector3 form = new Vector3(transform.position.x, 0, transform.position.z);
+        Array.Resize(ref players, players.Length -1);
 
-        transform.rotation = Quaternion.LookRotation(to - form);
-    }
-
-    Transform Target()
-    {
-        GameObject[] randomTarget = GameObject.FindGameObjectsWithTag("Player").Where(go => go != gameObject).ToArray();
-
-        Transform tragetPosition = randomTarget[Random.Range(0,randomTarget.Length)].transform;
-
-        target = tragetPosition;
+        target = players[UnityEngine.Random.Range(0,players.Length)].transform;
 
         return target;
     }
-
-    IEnumerator Pass()
+    
+    void CheckNearbyPlayer()
     {
-        navMeshAgent.ResetPath();
+        Collider[] colliders = Physics.OverlapSphere(transform.position, detectionRadius);
+        
+        List<Collider> validColliders = colliders.ToList();
 
-        isBomb = false;
+        validColliders.RemoveAll(collider => collider.gameObject.name == this.gameObject.name);
 
-        yield return new WaitForSeconds(Random.Range(0.0f, 0.5f));
+        isNearbyPlayer = validColliders.Any(collider => collider.CompareTag("Player"));
     }
 
-    IEnumerator Away()
+    void Run(Transform target)
     {
-        float currentTime = 0.0f;
-        float maxTime = 5.0f;
-
-        navMeshAgent.speed = speed;
-
-        navMeshAgent.SetDestination(CalculateMovePosition());
-        
-        Vector3 to = new Vector3(navMeshAgent.destination.x, 0, navMeshAgent.destination.z);            
-        Vector3 from = new Vector3(transform.position.x, 0, transform.position.z);
-        transform.rotation = Quaternion.LookRotation(to - from);
-
-        while(true)
+        if(hasBomb == true && target != null)
         {
-            currentTime += Time.deltaTime;
-
-            if((to - from).sqrMagnitude < 0.01f || currentTime >= maxTime)
-            {
-                ChangeState(PlayerState.Idle);
-                isPlayer = false;
-            }
-
-            yield return null;
+            Vector3 directionToTarget = target.position - transform.position;
+            Vector3 force = directionToTarget.normalized * runSpeed;
+            rigidbody.velocity = force;
         }
+    }
+
+
+    void OnDrawGizmos()
+    {
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(transform.position, detectionRadius);
+    }
+
+    void Away()
+    {
+        if(hasBomb) return;
+        if (isNearbyPlayer)
+        {
+            GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
+            Vector3 awayDirection = Vector3.zero;
+            foreach (var player in players)
+            {
+                if (player != this.gameObject)
+                {
+                    Vector3 directionToPlayer = transform.position - player.transform.position;
+                    awayDirection += directionToPlayer.normalized * detectionRadius;
+                }
+            }
+            rigidbody.velocity = awayDirection.normalized * runSpeed;
+        }
+    }
+
+    private void OnCollisionEnter(Collision other) 
+    {
+        if(other.gameObject.CompareTag("Player") && hasBomb == true && isPassBomb == true)
+        {
+            Player otherPlayer = other.gameObject.GetComponent<Player>();
+
+            bomb.transform.parent = other.transform;
+
+            bomb.transform.localPosition = new Vector3(0,2,0);
+
+            hasBomb = false;
+
+            otherPlayer.hasBomb = true;
+            otherPlayer.bomb = other.gameObject.transform.Find("Bomb").gameObject;
+
+            bomb = null;
+
+            target = null;
+
+            isPassBomb = false;
+
+            otherPlayer.bomb.GetComponent<Bomb>().ChangeHasBombPlayer();
+            
+            StartCoroutine(DelayTime(otherPlayer));
+        }
+    }
+
+    IEnumerator DelayTime(Player player)
+    {
+        yield return new WaitForSeconds(3.0f);
+        player.target = player.GetTarget();
+        player.isPassBomb = true;
     }
 }
